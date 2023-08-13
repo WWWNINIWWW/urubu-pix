@@ -1,56 +1,41 @@
-from rest_framework.decorators import api_view
+
 from User.models import User
 from User.serializers import UserSerializer
-from rest_framework.response import Response
-from rest_framework import status
-from rest_framework.views import APIView
-from rest_framework.exceptions import NotFound
-#from rest_framework import viewsets
+from rest_framework import generics
+from django.db.models.signals import post_save,pre_delete,pre_save
+from django.dispatch import receiver
+from values.models import Values
+from django.shortcuts import get_object_or_404
 
-"""from django.db.models.signals import post_save
-from django.dispatch import receiver"""
-
-class UserListAndCreate(APIView):
-    def get(self,request):
-        user  = User.objects.all()
-        serializer = UserSerializer(user, many=True)
-        return Response(serializer.data)
-    def post(self,request):
-        serializer = UserSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-class UserDetailChangeAndDelete(APIView):
-    def get_object(self,pk):
-        try:
-            return User.objects.get(pk=pk)
-        except User.DoesNotExist:
-            raise NotFound()
-    def get(self,request,pk):
-        user = self.get_object(pk)
-        serializer = UserSerializer(user)
-        return Response(serializer.data)
-    def put(self,request,pk):
-        user = self.get_object(pk)
-        serializer = UserSerializer(user,data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    def delete(self,request,pk):
-        user = self.get_object(pk)
-        user.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-    
-"""class UserViewSet(viewsets.ModelViewSet):
+class UserListAndCreate(generics.ListCreateAPIView):
     queryset = User.objects.all()
-    serializer_class = UserSerializer"""
+    serializer_class = UserSerializer
     
+class UserDetailChangeAndDelete(generics.RetrieveUpdateDestroyAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    def get_object(self):
+        user_id = self.kwargs['user_id']
+        user = get_object_or_404(User,user_id=user_id)
+        return user
     
-"""@receiver(post_save, sender=User)
-def apos_criar_objetivo(sender, instance, created, **kwargs):
+
+@receiver(post_save, sender=User)
+def after_create_user(sender, instance, created, **kwargs):
     if created:
+        user_id = instance.user_id
+        value = Values.objects.create(user_id=user_id)
+        return value
         
-        print("objeto criado")"""
+@receiver(pre_delete, sender=User)
+def before_delete_user(sender, instance, **kwargs):
+    try:
+        user_id = instance.user_id
+        value = Values.objects.get(user_id=user_id)
+        value.delete()
+        return value
+    except:
+        pass
+
+
+
